@@ -16,61 +16,108 @@
 # specific language governing permissions and limitations
 # under the License.
 
-"""Example DAG demonstrating the usage of the BashOperator."""
+"""
+### Tutorial Documentation
+Documentation that goes along with the Airflow tutorial located
+[here](https://airflow.apache.org/tutorial.html)
+"""
+# [START tutorial]
+# [START import_module]
+from datetime import datetime, timedelta
+from textwrap import dedent
 
-import datetime
-
-import pendulum
-
+# The DAG object; we'll need this to instantiate a DAG
 from airflow import DAG
+
+# Operators; we need this to operate!
 from airflow.operators.bash import BashOperator
-from airflow.operators.empty import EmptyOperator
 
+# [END import_module]
+
+
+# [START instantiate_dag]
 with DAG(
-    dag_id='test',
-    schedule_interval='0 0 * * *',
-    start_date=pendulum.datetime(2021, 1, 1, tz="UTC"),
+    'tutorial',
+    # [START default_args]
+    # These args will get passed on to each operator
+    # You can override them on a per-task basis during operator initialization
+    default_args={
+        'depends_on_past': False,
+        'email': ['airflow@example.com'],
+        'email_on_failure': False,
+        'email_on_retry': False,
+        'retries': 1,
+        'retry_delay': timedelta(minutes=5),
+        # 'queue': 'bash_queue',
+        # 'pool': 'backfill',
+        # 'priority_weight': 10,
+        # 'end_date': datetime(2016, 1, 1),
+        # 'wait_for_downstream': False,
+        # 'sla': timedelta(hours=2),
+        # 'execution_timeout': timedelta(seconds=300),
+        # 'on_failure_callback': some_function,
+        # 'on_success_callback': some_other_function,
+        # 'on_retry_callback': another_function,
+        # 'sla_miss_callback': yet_another_function,
+        # 'trigger_rule': 'all_success'
+    },
+    # [END default_args]
+    description='A simple tutorial DAG',
+    schedule_interval=timedelta(days=1),
+    start_date=datetime(2021, 1, 1),
     catchup=False,
-    dagrun_timeout=datetime.timedelta(minutes=60),
-    tags=['example', 'example2'],
-    params={"example_key": "example_value"},
+    tags=['example'],
 ) as dag:
-    run_this_last = EmptyOperator(
-        task_id='run_this_last',
+    # [END instantiate_dag]
+
+    # t1, t2 and t3 are examples of tasks created by instantiating operators
+    # [START basic_task]
+    t1 = BashOperator(
+        task_id='print_date',
+        bash_command='date',
     )
 
-    # [START howto_operator_bash]
-    run_this = BashOperator(
-        task_id='run_after_loop',
-        bash_command='echo 1',
+    t2 = BashOperator(
+        task_id='sleep',
+        depends_on_past=False,
+        bash_command='sleep 5',
+        retries=3,
     )
-    # [END howto_operator_bash]
+    # [END basic_task]
 
-    run_this >> run_this_last
-
-    for i in range(3):
-        task = BashOperator(
-            task_id='runme_' + str(i),
-            bash_command='echo "{{ task_instance_key_str }}" && sleep 1',
-        )
-        task >> run_this
-
-    # [START howto_operator_bash_template]
-    also_run_this = BashOperator(
-        task_id='also_run_this',
-        bash_command='echo "run_id={{ run_id }} | dag_run={{ dag_run }}"',
+    # [START documentation]
+    t1.doc_md = dedent(
+        """\
+    #### Task Documentation
+    You can document your task using the attributes `doc_md` (markdown),
+    `doc` (plain text), `doc_rst`, `doc_json`, `doc_yaml` which gets
+    rendered in the UI's Task Instance Details page.
+    ![img](http://montcs.bloomu.edu/~bobmon/Semesters/2012-01/491/import%20soul.png)
+    """
     )
-    # [END howto_operator_bash_template]
-    also_run_this >> run_this_last
 
-# [START howto_operator_bash_skip]
-this_will_skip = BashOperator(
-    task_id='this_will_skip',
-    bash_command='echo "hello world"; exit 99;',
-    dag=dag,
-)
-# [END howto_operator_bash_skip]
-this_will_skip >> run_this_last
+    dag.doc_md = __doc__  # providing that you have a docstring at the beginning of the DAG
+    dag.doc_md = """
+    This is a documentation placed anywhere
+    """  # otherwise, type it like this
+    # [END documentation]
 
-if __name__ == "__main__":
-    dag.cli()
+    # [START jinja_template]
+    templated_command = dedent(
+        """
+    {% for i in range(5) %}
+        echo "{{ ds }}"
+        echo "{{ macros.ds_add(ds, 7)}}"
+    {% endfor %}
+    """
+    )
+
+    t3 = BashOperator(
+        task_id='templated',
+        depends_on_past=False,
+        bash_command=templated_command,
+    )
+    # [END jinja_template]
+
+    t1 >> [t2, t3]
+# [END tutorial]
